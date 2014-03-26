@@ -35,6 +35,7 @@ public class Crawler {
 				List<String> urls = getAdUrls(html);
 				System.out.println("urls=" + urls);
 				System.out.println("urls count=" + urls.size());
+				dowloadUrls(urls, httpClient);
 			} finally {
 				response.close();
 			}
@@ -82,7 +83,47 @@ public class Crawler {
 	}
 
 	private static String parseText(String html) {
-		return "";
+		String dirtyText = parseForPrefixWithDelimeter(html, "<td class=\"rub\">",
+				"<table cellspacing=\"0\" cellpadding=\"0\" class=\"table100\"");
+		if (dirtyText.isEmpty()) {
+			System.err.println("Empty ad!!!");
+			return "";
+		}
+		String text = cleanText(dirtyText);
+		return text;
+	}
+
+	private static String cleanText(String text) {
+		StringBuilder builder = new StringBuilder();
+		boolean isTag = false;
+		for (int i = 0; i < text.length(); ++i) {
+			char c = text.charAt(i);
+			if (isTag) {
+				if (c == '>') {
+					isTag = false;
+				}
+			} else {
+				if (c == '<') {
+					isTag = true;
+				} else {
+					builder.append(c);
+				}
+			}
+		}
+		text = builder.toString();
+		String[] lines = text.split("\n");
+		builder = new StringBuilder();
+		for (String line : lines) {
+			line = line.trim();
+			if (line.isEmpty()) {
+				continue;
+			}
+			builder.append(line).append('\n');
+		}
+		builder.deleteCharAt(builder.length() - 1);
+		text = builder.toString();
+		text = text.replace("&nbsp;", " ");
+		return text;
 	}
 
 	private static int getPagesCount(String text) {
@@ -114,6 +155,10 @@ public class Crawler {
 	}
 
 	private static boolean isTitleTrue(String title) {
+		if (title.isEmpty()) {
+			System.err.println("Empty title!!!");
+			return false;
+		}
 		title = title.toLowerCase();
 		if (title.contains("диски") || title.contains("комплект") || title.contains("генератор")
 				|| title.contains("радиатор") || title.contains("сабуфер") || title.contains("запчасти")
