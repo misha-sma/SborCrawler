@@ -12,68 +12,81 @@ import org.apache.http.util.EntityUtils;
 
 public class Crawler {
 	private static final String BASE_URL = "http://www.all-sbor.net";
+	private static final String FIRST_PART_URL = "http://www.all-sbor.net/board/cat_29.html?page=";
+	private static final String SECOND_PART_URL = "&pagestyle=collapsed&stronpage=50&part=2";
+
+	private static final CloseableHttpClient httpClient = HttpClients.createDefault();
 
 	public static void main(String[] args) {
-		String url = "http://www.all-sbor.net/board/cat_29.html?page=1&pagestyle=collapsed&stronpage=50&part=2";
-		CloseableHttpClient httpClient = HttpClients.createDefault();
+		int pagesCount = getPagesCount();
+		System.out.println("pagesCount=" + pagesCount);
 		try {
-			HttpGet httpGet = new HttpGet(url);
-			httpGet.setHeader("Accept-Encoding", "gzip,deflate,sdch");
-			httpGet.setHeader("Accept-Language", "ru-RU,ru;q=0.8,en-US;q=0.6,en;q=0.4");
-			httpGet.setHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
-			httpGet.setHeader("User-Agent",
-					"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/33.0.1750.152 Safari/537.36");
-			CloseableHttpResponse response = httpClient.execute(httpGet);
-			try {
+			for (int pageNumber = 1; pageNumber <= pagesCount; ++pageNumber) {
+				System.out.println("PAGE NUMBER=" + pageNumber);
+				Util.sleep();
+				HttpGet httpGet = new HttpGet(FIRST_PART_URL + pageNumber + SECOND_PART_URL);
+				prepareRequest(httpGet);
+				CloseableHttpResponse response = httpClient.execute(httpGet);
 				System.out.println(response.getStatusLine());
 				HttpEntity entity = response.getEntity();
 				String html = EntityUtils.toString(entity, "cp1251");
-				System.out.println("html=" + html);
 				EntityUtils.consume(entity);
-				int pagesCount = getPagesCount(html);
-				System.out.println("pagesCount=" + pagesCount);
-				List<String> urls = getAdUrls(html);
-				System.out.println("urls=" + urls);
-				System.out.println("urls count=" + urls.size());
-				dowloadUrls(urls, httpClient);
-			} finally {
 				response.close();
+				List<String> urls = getAdUrls(html);
+				System.out.println("urls count=" + urls.size());
+				System.out.println("urls=" + urls);
+				dowloadUrls(urls);
 			}
 		} catch (ClientProtocolException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
 			e.printStackTrace();
-		} finally {
-			try {
-				httpClient.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
 		}
 	}
 
-	private static void dowloadUrls(List<String> urls, CloseableHttpClient httpClient) {
+	private static int getPagesCount() {
+		HttpGet httpGet = new HttpGet(FIRST_PART_URL + 1 + SECOND_PART_URL);
+		prepareRequest(httpGet);
+		try {
+			CloseableHttpResponse response = httpClient.execute(httpGet);
+			System.out.println(response.getStatusLine());
+			HttpEntity entity = response.getEntity();
+			String html = EntityUtils.toString(entity, "cp1251");
+			EntityUtils.consume(entity);
+			response.close();
+			return parsePagesCount(html);
+		} catch (ClientProtocolException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return 0;
+	}
+
+	private static void prepareRequest(HttpGet httpGet) {
+		httpGet.setHeader("Accept-Encoding", "gzip,deflate,sdch");
+		httpGet.setHeader("Accept-Language", "ru-RU,ru;q=0.8,en-US;q=0.6,en;q=0.4");
+		httpGet.setHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
+		httpGet.setHeader("User-Agent",
+				"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/33.0.1750.152 Safari/537.36");
+	}
+
+	private static void dowloadUrls(List<String> urls) {
 		try {
 			for (String url : urls) {
+				Util.sleep();
 				HttpGet httpGet = new HttpGet(url);
-				httpGet.setHeader("Accept-Encoding", "gzip,deflate,sdch");
-				httpGet.setHeader("Accept-Language", "ru-RU,ru;q=0.8,en-US;q=0.6,en;q=0.4");
-				httpGet.setHeader("Accept",
-						"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
-				httpGet.setHeader("User-Agent",
-						"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/33.0.1750.152 Safari/537.36");
-				CloseableHttpResponse response;
-				response = httpClient.execute(httpGet);
-				try {
-					System.out.println(response.getStatusLine());
-					HttpEntity entity = response.getEntity();
-					String html = EntityUtils.toString(entity, "cp1251");
-					System.out.println("html=" + html);
-					EntityUtils.consume(entity);
-					String text = parseText(html);
-				} finally {
-					response.close();
-				}
+				prepareRequest(httpGet);
+				CloseableHttpResponse response = httpClient.execute(httpGet);
+				System.out.println(response.getStatusLine());
+				HttpEntity entity = response.getEntity();
+				String html = EntityUtils.toString(entity, "cp1251");
+				EntityUtils.consume(entity);
+				response.close();
+				String text = parseText(html);
+				System.out.println(text);
+				System.out.println("--------------------------------------------------------------------");
+				System.out.println();
 			}
 		} catch (ClientProtocolException e) {
 			e.printStackTrace();
@@ -83,50 +96,17 @@ public class Crawler {
 	}
 
 	private static String parseText(String html) {
-		String dirtyText = parseForPrefixWithDelimeter(html, "<td class=\"rub\">",
+		String dirtyText = Util.parseForPrefixWithDelimeter(html, "<td class=\"rub\">",
 				"<table cellspacing=\"0\" cellpadding=\"0\" class=\"table100\"");
 		if (dirtyText.isEmpty()) {
 			System.err.println("Empty ad!!!");
 			return "";
 		}
-		String text = cleanText(dirtyText);
+		String text = Util.cleanText(dirtyText);
 		return text;
 	}
 
-	private static String cleanText(String text) {
-		StringBuilder builder = new StringBuilder();
-		boolean isTag = false;
-		for (int i = 0; i < text.length(); ++i) {
-			char c = text.charAt(i);
-			if (isTag) {
-				if (c == '>') {
-					isTag = false;
-				}
-			} else {
-				if (c == '<') {
-					isTag = true;
-				} else {
-					builder.append(c);
-				}
-			}
-		}
-		text = builder.toString();
-		String[] lines = text.split("\n");
-		builder = new StringBuilder();
-		for (String line : lines) {
-			line = line.trim();
-			if (line.isEmpty()) {
-				continue;
-			}
-			builder.append(line).append('\n');
-		}
-		builder.deleteCharAt(builder.length() - 1);
-		text = builder.toString();
-		text = text.replace("&nbsp;", " ");
-		return text;
-	}
-
-	private static int getPagesCount(String text) {
+	private static int parsePagesCount(String text) {
 		int index = text.lastIndexOf("&amp;pagestyle=collapsed&amp;stronpage=50&amp;part=2\">");
 		if (index == -1) {
 			return -1;
@@ -144,8 +124,8 @@ public class Crawler {
 			if (index == -1) {
 				continue;
 			}
-			String title = parseForPrefixWithDelimeter(dirtyUrls[i], "\">", "</a>");
-			if (!isTitleTrue(title)) {
+			String title = Util.parseForPrefixWithDelimeter(dirtyUrls[i], "\">", "</a>");
+			if (!Util.isTitleTrue(title)) {
 				continue;
 			}
 			String url = BASE_URL + "/board/details_" + dirtyUrls[i].substring(0, index);
@@ -154,29 +134,4 @@ public class Crawler {
 		return urls;
 	}
 
-	private static boolean isTitleTrue(String title) {
-		if (title.isEmpty()) {
-			System.err.println("Empty title!!!");
-			return false;
-		}
-		title = title.toLowerCase();
-		if (title.contains("диски") || title.contains("комплект") || title.contains("генератор")
-				|| title.contains("радиатор") || title.contains("сабуфер") || title.contains("запчасти")
-				|| title.contains("стартер") || title.contains("шины") || title.contains("резину")) {
-			return false;
-		}
-		return true;
-	}
-
-	private static String parseForPrefixWithDelimeter(String text, String prefix, String delimeter) {
-		int prefixIndex = text.indexOf(prefix);
-		if (prefixIndex == -1) {
-			return "";
-		}
-		int delimeterIndex = text.indexOf(delimeter, prefixIndex + prefix.length());
-		if (delimeterIndex == -1) {
-			return "";
-		}
-		return text.substring(prefixIndex + prefix.length(), delimeterIndex);
-	}
 }
