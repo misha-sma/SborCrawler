@@ -83,10 +83,17 @@ public class Crawler {
 				String html = EntityUtils.toString(entity, "cp1251");
 				EntityUtils.consume(entity);
 				response.close();
-				String text = parseText(html);
+				String[] textWithImageUrl = parseText(html);
+				String text = textWithImageUrl[0];
+				String imageUrl = textWithImageUrl[1];
 				System.out.println(text);
+				System.out.println(imageUrl);
 				System.out.println("--------------------------------------------------------------------");
 				System.out.println();
+				int idCar = CarDao.addCar(text, url);
+				if (!imageUrl.isEmpty()) {
+					downloadImage(imageUrl, idCar);
+				}
 			}
 		} catch (ClientProtocolException e) {
 			e.printStackTrace();
@@ -95,15 +102,40 @@ public class Crawler {
 		}
 	}
 
-	private static String parseText(String html) {
+	private static void downloadImage(String url, int idCar) {
+		Util.sleep();
+		HttpGet httpGet = new HttpGet(url);
+		prepareRequest(httpGet);
+		try {
+			CloseableHttpResponse response = httpClient.execute(httpGet);
+			System.out.println(response.getStatusLine());
+			HttpEntity entity = response.getEntity();
+			byte[] bytes = EntityUtils.toByteArray(entity);
+			Util.writeBytes2File(bytes, "images/" + idCar + ".jpg");
+			EntityUtils.consume(entity);
+			response.close();
+		} catch (ClientProtocolException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	private static String[] parseText(String html) {
 		String dirtyText = Util.parseForPrefixWithDelimeter(html, "<td class=\"rub\">",
 				"<table cellspacing=\"0\" cellpadding=\"0\" class=\"table100\"");
+		String[] result = new String[2];
+		result[0] = "";
+		result[1] = "";
 		if (dirtyText.isEmpty()) {
 			System.err.println("Empty ad!!!");
-			return "";
+			return result;
 		}
 		String text = Util.cleanText(dirtyText);
-		return text;
+		String imageUrl = Util.parseForPrefixWithDelimeter(dirtyText, "<img src=\"", "\" style=");
+		result[0] = text;
+		result[1] = imageUrl.isEmpty() ? "" : BASE_URL + imageUrl;
+		return result;
 	}
 
 	private static int parsePagesCount(String text) {

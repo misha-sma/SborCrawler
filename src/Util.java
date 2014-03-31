@@ -1,6 +1,7 @@
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
@@ -28,6 +29,18 @@ public class Util {
 
 	public static String loadText(String fileName) {
 		return loadText(new File(fileName));
+	}
+
+	public static void writeBytes2File(byte[] bytes, String path) {
+		try {
+			FileOutputStream output = new FileOutputStream(path);
+			output.write(bytes);
+			output.close();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	public static String parseForPrefixWithDelimeter(String text, String prefix, String delimeter) {
